@@ -1,85 +1,53 @@
-@isTest
-private class DeviceAssignmentTriggerTest {
+public with sharing class DeviceAssignmentTriggerHandler {
 
-    @TestSetup
-    static void setup() {
-        insert new Contact(LastName = 'Test Employee');
-
-        List<Device__c> devices = new List<Device__c>();
-        for (Integer i = 0; i < 200; i++) {
-            devices.add(new Device__c(
-                Name = 'Device ' + i,
-                Serial_Number__c = 'SN-T' + i,
-                Type__c = 'Laptop',
-                Status__c = 'Available'
-            ));
-        }
-        insert devices;
-    }
-
-    private static Device__c getDevice(String serial) {
-        return [SELECT Id, Status__c FROM Device__c WHERE Serial_Number__c = :serial];
-    }
-
-    @isTest
-    static void assignSetsStatusAssigned() {
-        Contact emp = [SELECT Id FROM Contact LIMIT 1];
-        Device__c dev = getDevice('SN-T0');
-
-        Test.startTest();
-        insert new Device_Assignment__c(Device__c = dev.Id, Employee__c = emp.Id, Start_Date__c = Date.today());
-        Test.stopTest();
-
-        Assert.areEqual('Assigned', getDevice('SN-T0').Status__c, 'Echipamentul trebuie să devină Assigned');
-    }
-
-    @isTest
-    static void doubleAssignIsBlocked() {
-        Contact emp = [SELECT Id FROM Contact LIMIT 1];
-        Device__c dev = getDevice('SN-T1');
-        insert new Device_Assignment__c(Device__c = dev.Id, Employee__c = emp.Id, Start_Date__c = Date.today());
-
-        Test.startTest();
-        Database.SaveResult sr = Database.insert(
-            new Device_Assignment__c(Device__c = dev.Id, Employee__c = emp.Id, Start_Date__c = Date.today()),
-            false
-        );
-        Test.stopTest();
-
-        Assert.isFalse(sr.isSuccess(), 'A doua alocare trebuie blocată');
-        Assert.isTrue(sr.getErrors()[0].getMessage().contains('nu este disponibil'));
-    }
-
-    @isTest
-    static void returnSetsStatusAvailable() {
-        Contact emp = [SELECT Id FROM Contact LIMIT 1];
-        Device__c dev = getDevice('SN-T2');
-        Device_Assignment__c da = new Device_Assignment__c(
-            Device__c = dev.Id, Employee__c = emp.Id, Start_Date__c = Date.today().addDays(-3)
-        );
-        insert da;
-
-        Test.startTest();
-        update new Device_Assignment__c(Id = da.Id, End_Date__c = Date.today());
-        Test.stopTest();
-
-        Assert.areEqual('Available', getDevice('SN-T2').Status__c, 'După returnare trebuie să fie Available');
-    }
-
-    @isTest
-    static void bulkAssign200() {
-        Contact emp = [SELECT Id FROM Contact LIMIT 1];
-        List<Device__c> devices = [SELECT Id FROM Device__c];
-        List<Device_Assignment__c> assignments = new List<Device_Assignment__c>();
-        for (Device__c d : devices) {
-            assignments.add(new Device_Assignment__c(Device__c = d.Id, Employee__c = emp.Id, Start_Date__c = Date.today()));
+    // BEFORE INSERT: blochează alocarea unui echipament care nu e Available
+    public static void validateAvailability(List<Device_Assignment__c> newList) {
+        Set<Id> deviceIds = new Set<Id>();
+        for (Device_Assignment__c da : newList) {
+            deviceIds.add(da.Device__c);
         }
 
-        Test.startTest();
-        insert assignments;
-        Test.stopTest();
+        // un singur query, în afara buclei
+        Map<Id, Device__c> devices = new Map<Id, Device__c>(
+            [SELECT Id, Status__c FROM Device__c WHERE Id IN :deviceIds]
+        );
 
-        Integer assigned = [SELECT COUNT() FROM Device__c WHERE Status__c = 'Assigned'];
-        Assert.areEqual(200, assigned, 'Toate cele 200 trebuie să fie Assigned');
+        Set<Id> seenInBatch = new Set<Id>();
+        for (Device_Assignment__c da : newList) {
+            Device__c dev = devices.get(da.Device__c);
+            if (dev != null && dev.Status__c != 'Available') {
+                da.addError('Echipamentul nu este disponibil (status: ' + dev.Status__c + ').');
+            } else if (!seenInBatch.add(da.Device__c)) {
+                da.addError('Același echipament apare de mai multe ori în aceeași operațiune.');
+            }
+        }
+    }
+
+    // AFTER INSERT: echipamentul devine Assigned
+    public static void markDevicesAssigned(List<Device_Assignment__c> newList) {
+        Map<Id, Device__c> toUpdate = new Map<Id, Device__c>();
+        for (Device_Assignment__c da : newList) {
+            if (da.End_Date__c == null) {
+                toUpdate.put(da.Device__c, new Device__c(Id = da.Device__c, Status__c = 'Assigned'));
+            }
+        }
+        if (!toUpdate.isEmpty()) {
+            update toUpdate.values();   // un singur DML
+        }
+    }
+
+    // AFTER UPDATE: la returnare (End Date completat) echipamentul revine Available
+    public static void markDevicesReturned(List<Device_Assignment__c> newList,
+                                           Map<Id, Device_Assignment__c> oldMap) {
+        Map<Id, Device__c> toUpdate = new Map<Id, Device__c>();
+        for (Device_Assignment__c da : newList) {
+            Device_Assignment__c oldDa = oldMap.get(da.Id);
+            if (da.End_Date__c != null && oldDa.End_Date__c == null) {
+                toUpdate.put(da.Device__c, new Device__c(Id = da.Device__c, Status__c = 'Available'));
+            }
+        }
+        if (!toUpdate.isEmpty()) {
+            update toUpdate.values();
+        }
     }
 }
