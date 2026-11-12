@@ -1,6 +1,6 @@
 # Salesforce Device Tracker
 
-Un proiect mic făcut de mine ca să exersez Salesforce: o aplicație care ține evidența echipamentelor IT (laptopuri, monitoare, telefoane) și a angajaților cărora le sunt date. Am pornit de la ce văd zilnic la serviciu, la suportul IT.
+Un proiect mic făcut de mine ca să exersez Salesforce: o aplicație care ține evidența echipamentelor IT (laptopuri, monitoare, telefoane) și a angajaților cărora le sunt date.
 
 ## Ce face
 - ține evidența echipamentelor: tip, serie unică, status
