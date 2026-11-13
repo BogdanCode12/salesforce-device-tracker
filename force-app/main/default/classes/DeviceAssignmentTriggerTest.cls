@@ -1,7 +1,7 @@
 @isTest
 private class DeviceAssignmentTriggerTest {
 
-    @TestSetup
+    @TestSetup 
     static void setup() {
         insert new Contact(LastName = 'Test Employee');
 
