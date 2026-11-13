@@ -20,7 +20,7 @@ private class DeviceAssignmentTriggerTest {
     private static Device__c getDevice(String serial) {
         return [SELECT Id, Status__c FROM Device__c WHERE Serial_Number__c = :serial];
     }
-
+//Creează o alocare nouă pe un echipament Available.
     @isTest
     static void assignSetsStatusAssigned() {
         Contact emp = [SELECT Id FROM Contact LIMIT 1];
@@ -32,7 +32,7 @@ private class DeviceAssignmentTriggerTest {
 
         Assert.areEqual('Assigned', getDevice('SN-T0').Status__c, 'Echipamentul trebuie să devină Assigned');
     }
-
+//Alocă un echipament, apoi încearcă să-l aloce a doua oară.
     @isTest
     static void doubleAssignIsBlocked() {
         Contact emp = [SELECT Id FROM Contact LIMIT 1];
@@ -49,7 +49,7 @@ private class DeviceAssignmentTriggerTest {
         Assert.isFalse(sr.isSuccess(), 'A doua alocare trebuie blocată');
         Assert.isTrue(sr.getErrors()[0].getMessage().contains('nu este disponibil'));
     }
-
+//Alocă un echipament, apoi completează End Date.
     @isTest
     static void returnSetsStatusAvailable() {
         Contact emp = [SELECT Id FROM Contact LIMIT 1];
@@ -65,7 +65,7 @@ private class DeviceAssignmentTriggerTest {
 
         Assert.areEqual('Available', getDevice('SN-T2').Status__c, 'După returnare trebuie să fie Available');
     }
-
+//Creează 200 de alocări deodată, într-o singură operație.
     @isTest
     static void bulkAssign200() {
         Contact emp = [SELECT Id FROM Contact LIMIT 1];
